@@ -2,52 +2,74 @@
 
 **Related Issue**: https://github.com/microsoft/TypeScript/issues/55021
 
-Minimal reproduction of TypeScript error TS2742 with namespaced types across package boundaries in monorepo.
+Minimal reproduction of TypeScript error TS2742 with Cloudflare Workers types across package boundaries in monorepo.
 
-## Problem
+## The Error
 
-When using types from deep namespace imports across package boundaries, TypeScript sometimes cannot create portable .d.ts files and throws:
+This reproduction successfully triggers the exact TypeScript portable type error:
 
+```bash
+> pnpm build
+
+consumer/src/index.ts(5,14): error TS2742: The inferred type of 'MyDurableObjectClass' cannot be named without a reference to '../../packages/common/node_modules/@cloudflare/workers-types'. This is likely not portable. A type annotation is necessary.
+ ELIFECYCLE  Command failed with exit code 2.
 ```
-error TS2742: The inferred type cannot be named without a reference to deep node_modules path. This is likely not portable. A type annotation is necessary.
-```
 
-## Reproduction Setup
+## Reproduction
 
 ```bash
 pnpm install
 pnpm build
 ```
 
-*Note: This specific configuration may not trigger the error in all TypeScript versions, but demonstrates the problematic pattern.*
+## Root Cause
 
-## The Pattern
+The error occurs when TypeScript tries to generate `.d.ts` files for a factory function that returns a class with deep namespace type references (`CF.DurableObjectState`, `CF.DurableObject`) across package boundaries. TypeScript cannot create a portable reference to the deep `node_modules/@cloudflare/workers-types` path.
 
-**Problematic** - Direct namespace usage in constructor types:
+## The Problematic Pattern
+
+**❌ Triggers TS2742 error** (`packages/factory/src/index.ts`):
 ```typescript
-export const createClass = () => {
-  return class {
+export const createDurableObjectClass = (options?: ComplexOptions) => {
+  return class MyDurableObject implements CF.DurableObject {
     constructor(public state: CF.DurableObjectState, public env: Env) {}
+    
+    getState(): CF.DurableObjectState {
+      return this.state
+    }
   }
 }
 ```
 
-**Solution** - Type aliases at module level:
+**✅ Fixed with type aliases** (same file):
 ```typescript
-export type State = CF.DurableObjectState
-export type DurableObject = CF.DurableObject
+export type DoState = CF.DurableObjectState
+export type DoObject = CF.DurableObject
 
-export const createClass = () => {
-  return class {
-    constructor(public state: State, public env: Env) {}
+export const createDurableObjectClassFixed = (options?: ComplexOptions) => {
+  return class MyDurableObjectFixed implements DoObject {
+    constructor(public state: DoState, public env: Env) {}
+    
+    getState(): DoState {
+      return this.state
+    }
   }
 }
 ```
 
 ## Structure
 
-- `packages/common` - Re-exports external types under namespace
-- `packages/factory` - Factory function with the problematic pattern
-- `consumer` - Imports and exports the factory result
+- `packages/common` - Re-exports `@cloudflare/workers-types` under `CF` namespace
+- `packages/factory` - Factory functions (broken & fixed versions)
+- `consumer` - Exports factory result, triggering the error during `.d.ts` generation
 
-The error occurs when TypeScript tries to generate portable declaration files but cannot resolve deep import paths across package boundaries in certain scenarios.
+## Configuration
+
+Uses TypeScript configuration matching the original project's `tsconfig.base.json`:
+- `target: "ESNext"`, `module: "ESNext"`, `moduleResolution: "node"`
+- Strict TypeScript settings with composite project references
+- `skipLibCheck: true` to avoid DOM type conflicts
+
+## Solution
+
+The fix is to create type aliases at the module level rather than using namespace types directly in complex return types. This gives TypeScript stable reference points that don't require deep node_modules paths in declaration files.

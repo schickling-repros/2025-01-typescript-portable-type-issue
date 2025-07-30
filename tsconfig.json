@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "declaration": true,
+    "outDir": "./dist",
+    "skipLibCheck": true,
+    "composite": true
+  },
+  "references": [
+    { "path": "./packages/common" },
+    { "path": "./packages/factory" },
+    { "path": "./consumer" }
+  ],
+  "files": []
+}

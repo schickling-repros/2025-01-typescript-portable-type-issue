@@ -1,0 +1,11 @@
+{
+  "name": "typescript-portable-type-repro",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

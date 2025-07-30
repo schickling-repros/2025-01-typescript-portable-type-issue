@@ -4,31 +4,51 @@ export interface Env {
   DB: any
 }
 
-// ❌ This causes the portable type error when exported and inferred
-export const createClass = () => {
-  return class {
+interface ComplexOptions {
+  onMessage?: (state: CF.DurableObjectState) => Promise<void>
+  onCreate?: (obj: CF.DurableObject) => void
+}
+
+// ❌ This causes the portable type error - complex return type with nested CF namespace references
+export const createDurableObjectClass = (options?: ComplexOptions) => {
+  return class MyDurableObject implements CF.DurableObject {
     constructor(public state: CF.DurableObjectState, public env: Env) {}
     
     async fetch(): Promise<any> {
+      if (options?.onMessage) {
+        await options.onMessage(this.state)
+      }
       return { status: 200, body: 'Hello' }
+    }
+    
+    getState(): CF.DurableObjectState {
+      return this.state
+    }
+    
+    getEnv(): Env {
+      return this.env
     }
   }
 }
 
 // ✅ This works - type aliases fix the issue
-export type State = CF.DurableObjectState
-export type DurableObject = CF.DurableObject
+export type DoState = CF.DurableObjectState
+export type DoObject = CF.DurableObject
 
-export type CreateClassFixed = () => {
-  new (state: State, env: Env): DurableObject
-}
-
-export const createClassFixed: CreateClassFixed = () => {
-  return class {
-    constructor(public state: State, public env: Env) {}
+export const createDurableObjectClassFixed = (options?: ComplexOptions) => {
+  return class MyDurableObjectFixed implements DoObject {
+    constructor(public state: DoState, public env: Env) {}
     
     async fetch(): Promise<any> {
       return { status: 200, body: 'Hello' }
+    }
+    
+    getState(): DoState {
+      return this.state
+    }
+    
+    getEnv(): Env {
+      return this.env
     }
   }
 }
